@@ -34,11 +34,20 @@ function App() {
       if (response.ok) {
         localStorage.setItem('token', data.token)
         setUser(data.user)
+        
+        // DEBUG: Log what we're getting from backend
+        console.log('🔍 LOGIN DEBUG - Backend response:', data.user);
+        console.log('🔍 LOGIN DEBUG - Subscription status:', data.user.subscription_status);
+        console.log('🔍 LOGIN DEBUG - Status type:', typeof data.user.subscription_status);
+        
         // Check subscription status before allowing dashboard access
         if (data.user.subscription_status === 'active') {
+          console.log('✅ LOGIN DEBUG - User is ACTIVE, going to dashboard');
           setCurrentView('dashboard')
           loadPartRequests()
         } else {
+          console.log('❌ LOGIN DEBUG - User is NOT ACTIVE, going to subscription selection');
+          console.log('❌ LOGIN DEBUG - Status was:', data.user.subscription_status);
           setCurrentView('subscription-selection')
         }
       } else {
@@ -102,12 +111,21 @@ function App() {
       const data = await response.json()
       if (response.ok) {
         setUser(data.user)
+        
+        // DEBUG: Log what we're getting from backend
+        console.log('🔍 LOADPROFILE DEBUG - Backend response:', data.user);
+        console.log('🔍 LOADPROFILE DEBUG - Subscription status:', data.user.subscription_status);
+        console.log('🔍 LOADPROFILE DEBUG - Status type:', typeof data.user.subscription_status);
+        
         // Only allow dashboard access for users with active subscriptions
         // Users with 'inactive' status must go through subscription selection
         if (data.user.subscription_status === 'active') {
+          console.log('✅ LOADPROFILE DEBUG - User is ACTIVE, going to dashboard');
           setCurrentView('dashboard')
           loadPartRequests()
         } else {
+          console.log('❌ LOADPROFILE DEBUG - User is NOT ACTIVE, going to subscription selection');
+          console.log('❌ LOADPROFILE DEBUG - Status was:', data.user.subscription_status);
           // Force subscription selection for inactive users
           setCurrentView('subscription-selection')
         }
