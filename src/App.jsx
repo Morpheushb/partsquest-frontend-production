@@ -33,6 +33,7 @@ function App() {
       const data = await response.json()
       if (response.ok) {
         localStorage.setItem('token', data.token)
+        localStorage.setItem('user', JSON.stringify(data.user)) // Store user for nuclear check
         setUser(data.user)
         
         // DEBUG: Log what we're getting from backend
@@ -100,6 +101,37 @@ function App() {
     // If no token, stay on landing page (default currentView)
   }, [])
 
+  // NUCLEAR OPTION - Check subscription on EVERY view change
+  useEffect(() => {
+    console.log('🚨 NUCLEAR CHECK - Current view:', currentView);
+    
+    if (currentView === 'dashboard') {
+      const token = localStorage.getItem('token')
+      const userStr = localStorage.getItem('user')
+      
+      console.log('🚨 NUCLEAR CHECK - Dashboard access attempt');
+      console.log('🚨 NUCLEAR CHECK - Token exists:', !!token);
+      console.log('🚨 NUCLEAR CHECK - User in localStorage:', userStr);
+      
+      if (token && userStr) {
+        const user = JSON.parse(userStr)
+        console.log('🚨 NUCLEAR CHECK - User object:', user);
+        console.log('🚨 NUCLEAR CHECK - Subscription status:', user.subscription_status);
+        
+        if (user.subscription_status !== 'active') {
+          console.error('🚨 SUBSCRIPTION BYPASS DETECTED! Blocking access.');
+          alert('SUBSCRIPTION BYPASS DETECTED! Redirecting to subscription selection.');
+          setCurrentView('subscription-selection')
+          return
+        }
+      } else {
+        console.error('🚨 DASHBOARD ACCESS WITHOUT TOKEN! Redirecting to login.');
+        setCurrentView('login')
+        return
+      }
+    }
+  }, [currentView]) // Run on EVERY view change
+
   const loadProfile = async () => {
     const token = localStorage.getItem('token')
     if (!token) return
@@ -110,6 +142,7 @@ function App() {
       })
       const data = await response.json()
       if (response.ok) {
+        localStorage.setItem('user', JSON.stringify(data.user)) // Store user for nuclear check
         setUser(data.user)
         
         // DEBUG: Log what we're getting from backend
