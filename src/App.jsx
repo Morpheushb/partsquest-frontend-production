@@ -16,7 +16,7 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://partsquest-backend
 function App() {
   const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(false)
-  const [currentView, setCurrentView] = useState('login')
+  const [currentView, setCurrentView] = useState('landing')
   const [partRequests, setPartRequests] = useState([])
   const [searchQuery, setSearchQuery] = useState('')
   const [isListening, setIsListening] = useState(false)
@@ -34,8 +34,13 @@ function App() {
       if (response.ok) {
         localStorage.setItem('token', data.token)
         setUser(data.user)
-        setCurrentView('dashboard')
-        loadPartRequests()
+        // Check subscription status before allowing dashboard access
+        if (data.user.subscription_status === 'active') {
+          setCurrentView('dashboard')
+          loadPartRequests()
+        } else {
+          setCurrentView('subscription-selection')
+        }
       } else {
         alert(data.error || 'Login failed')
       }
@@ -57,7 +62,9 @@ function App() {
       if (response.ok) {
         localStorage.setItem('token', data.token)
         setUser(data.user)
-        setCurrentView('dashboard')
+        // Force redirect to subscription selection for new users
+        // Do NOT call loadProfile here to prevent race condition
+        setCurrentView('subscription-selection')
       } else {
         alert(data.error || 'Registration failed')
       }
@@ -78,8 +85,10 @@ function App() {
   useEffect(() => {
     const token = localStorage.getItem('token')
     if (token) {
+      // If user has a token, load their profile and redirect appropriately
       loadProfile()
     }
+    // If no token, stay on landing page (default currentView)
   }, [])
 
   const loadProfile = async () => {
@@ -93,8 +102,15 @@ function App() {
       const data = await response.json()
       if (response.ok) {
         setUser(data.user)
-        setCurrentView('dashboard')
-        loadPartRequests()
+        // Only allow dashboard access for users with active subscriptions
+        // Users with 'inactive' status must go through subscription selection
+        if (data.user.subscription_status === 'active' || data.user.subscription_status === 'free') {
+          setCurrentView('dashboard')
+          loadPartRequests()
+        } else {
+          // Force subscription selection for inactive users
+          setCurrentView('subscription-selection')
+        }
       } else {
         logout()
       }
@@ -115,6 +131,9 @@ function App() {
       const data = await response.json()
       if (response.ok) {
         setPartRequests(data.part_requests || [])
+      } else if (response.status === 403) {
+        // Subscription required error
+        setCurrentView('subscription-selection')
       }
     } catch (error) {
       console.error('Failed to load part requests:', error)
@@ -139,6 +158,10 @@ function App() {
       if (response.ok) {
         loadPartRequests()
         alert('Part request created successfully!')
+      } else if (response.status === 403) {
+        // Subscription required error
+        alert('Subscription required to create part requests. Please upgrade your plan.')
+        setCurrentView('subscription-selection')
       } else {
         alert(data.error || 'Failed to create part request')
       }
@@ -203,8 +226,8 @@ function App() {
   }
 
   // Login/Register Form Component
-  const AuthForm = () => {
-    const [isLogin, setIsLogin] = useState(true)
+  const AuthForm = ({ isRegisterMode = false }) => {
+    const [isLogin, setIsLogin] = useState(!isRegisterMode)
     const [formData, setFormData] = useState({
       email: '',
       password: '',
@@ -608,7 +631,7 @@ function App() {
                     </ul>
                     <Button 
                       className="w-full" 
-                      onClick={() => startSubscription('price_1234567890')}
+                      onClick={() => startSubscription('price_1QKxJhJNcmPXDtNg8YQzQhWx')}
                       disabled={loading || user?.subscription_status === 'active'}
                     >
                       {user?.subscription_status === 'active' ? 'Active' : (loading ? 'Processing...' : 'Upgrade to Pro')}
@@ -732,9 +755,398 @@ function App() {
     )
   }
 
+  // Subscription Selection Component
+  const SubscriptionSelection = () => {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
+        <div className="max-w-7xl mx-auto py-8">
+          <div className="text-center mb-8">
+            <h1 className="text-3xl font-bold text-blue-600 mb-2">Welcome, {user?.first_name}!</h1>
+            <p className="text-gray-600">Choose your PartsQuest subscription plan to get started</p>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-6">
+            {/* Test Plan */}
+            <Card className="border-blue-200 bg-blue-50 relative">
+              <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
+                <Badge className="bg-blue-600 text-white">RECOMMENDED</Badge>
+              </div>
+              <CardHeader>
+                <CardTitle>Test Plan</CardTitle>
+                <CardDescription>Perfect for testing all features</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="text-3xl font-bold">$0.50<span className="text-sm font-normal">/month</span></div>
+                <ul className="space-y-2 text-sm">
+                  <li className="flex items-center"><CheckCircle className="h-4 w-4 text-green-500 mr-2" />5 voice calls</li>
+                  <li className="flex items-center"><CheckCircle className="h-4 w-4 text-green-500 mr-2" />10 web searches</li>
+                  <li className="flex items-center"><CheckCircle className="h-4 w-4 text-green-500 mr-2" />2 vehicles</li>
+                </ul>
+                <Button 
+                  className="w-full" 
+                  onClick={() => startSubscription('price_1RyNopKAQFTUDRwnEcbiX8RQ')}
+                  disabled={loading}
+                >
+                  {loading ? 'Processing...' : 'Start Test'}
+                </Button>
+              </CardContent>
+            </Card>
+
+            {/* Starter Plan */}
+            <Card className="relative">
+              <CardHeader>
+                <CardTitle>Starter</CardTitle>
+                <CardDescription>Essential features for small teams</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="text-3xl font-bold">$199<span className="text-sm font-normal">/month</span></div>
+                <ul className="space-y-2 text-sm">
+                  <li className="flex items-center"><CheckCircle className="h-4 w-4 text-green-500 mr-2" />10 voice calls</li>
+                  <li className="flex items-center"><CheckCircle className="h-4 w-4 text-green-500 mr-2" />50 web searches</li>
+                  <li className="flex items-center"><CheckCircle className="h-4 w-4 text-green-500 mr-2" />5 vehicles</li>
+                </ul>
+                <Button 
+                  variant="outline"
+                  className="w-full" 
+                  onClick={() => startSubscription('price_1RyNwlKAQFTUDRwnVWZpwUn3')}
+                  disabled={loading}
+                >
+                  {loading ? 'Processing...' : 'Get Started'}
+                </Button>
+              </CardContent>
+            </Card>
+
+            {/* Professional Plan */}
+            <Card className="relative">
+              <CardHeader>
+                <CardTitle className="flex items-center">
+                  Professional
+                  <Zap className="h-5 w-5 ml-2 text-yellow-500" />
+                </CardTitle>
+                <CardDescription>Advanced AI-powered features</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="text-3xl font-bold">$399<span className="text-sm font-normal">/month</span></div>
+                <ul className="space-y-2 text-sm">
+                  <li className="flex items-center"><CheckCircle className="h-4 w-4 text-green-500 mr-2" />50 voice calls</li>
+                  <li className="flex items-center"><CheckCircle className="h-4 w-4 text-green-500 mr-2" />200 web searches</li>
+                  <li className="flex items-center"><CheckCircle className="h-4 w-4 text-green-500 mr-2" />25 vehicles</li>
+                </ul>
+                <Button 
+                  variant="outline"
+                  className="w-full" 
+                  onClick={() => startSubscription('price_1RyNy2KAQFTUDRwnKOU8UfD3')}
+                  disabled={loading}
+                >
+                  {loading ? 'Processing...' : 'Get Started'}
+                </Button>
+              </CardContent>
+            </Card>
+
+            {/* Fleet Plan */}
+            <Card className="relative">
+              <CardHeader>
+                <CardTitle>Fleet</CardTitle>
+                <CardDescription>For large operations</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="text-3xl font-bold">$699<span className="text-sm font-normal">/month</span></div>
+                <ul className="space-y-2 text-sm">
+                  <li className="flex items-center"><CheckCircle className="h-4 w-4 text-green-500 mr-2" />150 voice calls</li>
+                  <li className="flex items-center"><CheckCircle className="h-4 w-4 text-green-500 mr-2" />500 web searches</li>
+                  <li className="flex items-center"><CheckCircle className="h-4 w-4 text-green-500 mr-2" />100 vehicles</li>
+                </ul>
+                <Button 
+                  variant="outline"
+                  className="w-full" 
+                  onClick={() => startSubscription('price_1RyNzDKAQFTUDRwnv3XmIOFk')}
+                  disabled={loading}
+                >
+                  {loading ? 'Processing...' : 'Get Started'}
+                </Button>
+              </CardContent>
+            </Card>
+
+            {/* Enterprise Plan */}
+            <Card className="relative">
+              <CardHeader>
+                <CardTitle>Enterprise</CardTitle>
+                <CardDescription>Unlimited everything</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="text-3xl font-bold">$1200<span className="text-sm font-normal">/month</span></div>
+                <ul className="space-y-2 text-sm">
+                  <li className="flex items-center"><CheckCircle className="h-4 w-4 text-green-500 mr-2" />Unlimited calls</li>
+                  <li className="flex items-center"><CheckCircle className="h-4 w-4 text-green-500 mr-2" />Unlimited searches</li>
+                  <li className="flex items-center"><CheckCircle className="h-4 w-4 text-green-500 mr-2" />Unlimited vehicles</li>
+                </ul>
+                <Button 
+                  variant="outline"
+                  className="w-full" 
+                  onClick={() => startSubscription('price_1RyO0HKAQFTUDRwnDQSDomWt')}
+                  disabled={loading}
+                >
+                  {loading ? 'Processing...' : 'Get Started'}
+                </Button>
+              </CardContent>
+            </Card>
+          </div>
+          
+          <div className="text-center mt-8">
+            <p className="text-sm text-gray-500">
+              Need help choosing? <a href="#" className="text-blue-500">Contact our team</a>
+            </p>
+            <p className="text-sm text-gray-500 mt-2">
+              You can upgrade or downgrade your plan at any time from your dashboard
+            </p>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // Landing Page Component
+  const LandingPage = () => {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-white">
+        {/* Header */}
+        <header className="bg-white shadow-sm">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="flex justify-between items-center py-6">
+              <div className="flex items-center space-x-3">
+                <img src="/partsquest-logo.png" alt="PartsQuest" className="h-10 w-auto" />
+              </div>
+              <div className="flex items-center space-x-4">
+                <Button variant="ghost" onClick={() => setCurrentView('login')}>
+                  Sign In
+                </Button>
+                <Button onClick={() => setCurrentView('register')}>
+                  Get Started
+                </Button>
+              </div>
+            </div>
+          </div>
+        </header>
+
+        {/* Hero Section */}
+        <section className="py-20 px-4 sm:px-6 lg:px-8">
+          <div className="max-w-7xl mx-auto text-center">
+            <h1 className="text-5xl md:text-6xl font-bold text-gray-900 mb-6">
+              Find Auto Parts with <span className="text-blue-600">AI-Powered Search</span>
+            </h1>
+            <p className="text-xl text-gray-600 mb-8 max-w-3xl mx-auto">
+              Stop wasting time calling suppliers one by one. Our AI assistant calls multiple parts 
+              suppliers simultaneously while searching online catalogs to find the best prices and 
+              availability for your auto parts.
+            </p>
+            <div className="flex flex-col sm:flex-row gap-4 justify-center">
+              <Button size="lg" className="text-lg px-8 py-4" onClick={() => setCurrentView('register')}>
+                <Zap className="mr-2 h-5 w-5" />
+                Start Free Search
+              </Button>
+              <Button variant="outline" size="lg" className="text-lg px-8 py-4">
+                <Phone className="mr-2 h-5 w-5" />
+                Watch Demo
+              </Button>
+            </div>
+          </div>
+        </section>
+
+        {/* Value Proposition */}
+        <section className="py-16 bg-white">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="text-center mb-16">
+              <h2 className="text-3xl font-bold text-gray-900 mb-4">
+                Reduce Search Time by 90%
+              </h2>
+              <p className="text-lg text-gray-600">
+                From 30-45 minutes to 30-60 seconds
+              </p>
+            </div>
+            
+            <div className="grid md:grid-cols-3 gap-8">
+              <div className="text-center">
+                <div className="w-16 h-16 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <Phone className="h-8 w-8 text-purple-600" />
+                </div>
+                <h3 className="text-xl font-semibold mb-2">AI Voice Calling</h3>
+                <p className="text-gray-600">
+                  Our AI assistant calls multiple suppliers simultaneously, navigating phone trees and speaking 
+                  with parts departments to get real-time pricing and availability.
+                </p>
+              </div>
+              
+              <div className="text-center">
+                <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <Search className="h-8 w-8 text-green-600" />
+                </div>
+                <h3 className="text-xl font-semibold mb-2">Web Search</h3>
+                <p className="text-gray-600">
+                  Simultaneously searches major online parts catalogs including RockAuto, AutoZone, and Advance Auto 
+                  Parts for comprehensive coverage.
+                </p>
+              </div>
+              
+              <div className="text-center">
+                <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <CheckCircle className="h-8 w-8 text-blue-600" />
+                </div>
+                <h3 className="text-xl font-semibold mb-2">Unified Results</h3>
+                <p className="text-gray-600">
+                  All results are aggregated and compared in one dashboard, showing you the best prices, availability, 
+                  and supplier information in minutes.
+                </p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Pricing Section */}
+        <section className="py-16 bg-gray-50">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="text-center mb-16">
+              <h2 className="text-3xl font-bold text-gray-900 mb-4">
+                Choose Your Plan
+              </h2>
+              <p className="text-lg text-gray-600">
+                Start with our test plan and scale as you grow
+              </p>
+            </div>
+            
+            <div className="grid md:grid-cols-3 lg:grid-cols-5 gap-6">
+              {/* Test Plan */}
+              <Card className="relative border-blue-200">
+                <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
+                  <Badge className="bg-blue-600">Recommended</Badge>
+                </div>
+                <CardHeader>
+                  <CardTitle>Test Plan</CardTitle>
+                  <CardDescription>Try it out</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-3xl font-bold mb-4">$0.50<span className="text-sm font-normal">/month</span></div>
+                  <ul className="space-y-2 text-sm mb-6">
+                    <li className="flex items-center"><CheckCircle className="h-4 w-4 text-green-500 mr-2" />1 call per month</li>
+                    <li className="flex items-center"><CheckCircle className="h-4 w-4 text-green-500 mr-2" />5 searches per month</li>
+                    <li className="flex items-center"><CheckCircle className="h-4 w-4 text-green-500 mr-2" />1 vehicle</li>
+                  </ul>
+                  <Button className="w-full" onClick={() => setCurrentView('login')}>
+                    Get Started
+                  </Button>
+                </CardContent>
+              </Card>
+
+              {/* Starter Plan */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Starter</CardTitle>
+                  <CardDescription>For small shops</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-3xl font-bold mb-4">$199<span className="text-sm font-normal">/month</span></div>
+                  <ul className="space-y-2 text-sm mb-6">
+                    <li className="flex items-center"><CheckCircle className="h-4 w-4 text-green-500 mr-2" />50 calls per month</li>
+                    <li className="flex items-center"><CheckCircle className="h-4 w-4 text-green-500 mr-2" />200 searches per month</li>
+                    <li className="flex items-center"><CheckCircle className="h-4 w-4 text-green-500 mr-2" />10 vehicles</li>
+                  </ul>
+                  <Button variant="outline" className="w-full" onClick={() => setCurrentView('login')}>
+                    Get Started
+                  </Button>
+                </CardContent>
+              </Card>
+
+              {/* Professional Plan */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Professional</CardTitle>
+                  <CardDescription>For growing shops</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-3xl font-bold mb-4">$399<span className="text-sm font-normal">/month</span></div>
+                  <ul className="space-y-2 text-sm mb-6">
+                    <li className="flex items-center"><CheckCircle className="h-4 w-4 text-green-500 mr-2" />150 calls per month</li>
+                    <li className="flex items-center"><CheckCircle className="h-4 w-4 text-green-500 mr-2" />500 searches per month</li>
+                    <li className="flex items-center"><CheckCircle className="h-4 w-4 text-green-500 mr-2" />25 vehicles</li>
+                  </ul>
+                  <Button variant="outline" className="w-full" onClick={() => setCurrentView('login')}>
+                    Get Started
+                  </Button>
+                </CardContent>
+              </Card>
+
+              {/* Fleet Plan */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Fleet</CardTitle>
+                  <CardDescription>For large operations</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-3xl font-bold mb-4">$699<span className="text-sm font-normal">/month</span></div>
+                  <ul className="space-y-2 text-sm mb-6">
+                    <li className="flex items-center"><CheckCircle className="h-4 w-4 text-green-500 mr-2" />300 calls per month</li>
+                    <li className="flex items-center"><CheckCircle className="h-4 w-4 text-green-500 mr-2" />1000 searches per month</li>
+                    <li className="flex items-center"><CheckCircle className="h-4 w-4 text-green-500 mr-2" />50 vehicles</li>
+                  </ul>
+                  <Button variant="outline" className="w-full" onClick={() => setCurrentView('login')}>
+                    Get Started
+                  </Button>
+                </CardContent>
+              </Card>
+
+              {/* Enterprise Plan */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Enterprise</CardTitle>
+                  <CardDescription>Unlimited everything</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-3xl font-bold mb-4">$1200<span className="text-sm font-normal">/month</span></div>
+                  <ul className="space-y-2 text-sm mb-6">
+                    <li className="flex items-center"><CheckCircle className="h-4 w-4 text-green-500 mr-2" />Unlimited calls</li>
+                    <li className="flex items-center"><CheckCircle className="h-4 w-4 text-green-500 mr-2" />Unlimited searches</li>
+                    <li className="flex items-center"><CheckCircle className="h-4 w-4 text-green-500 mr-2" />Unlimited vehicles</li>
+                  </ul>
+                  <Button variant="outline" className="w-full" onClick={() => setCurrentView('login')}>
+                    Get Started
+                  </Button>
+                </CardContent>
+              </Card>
+            </div>
+          </div>
+        </section>
+
+        {/* Footer */}
+        <footer className="bg-gray-900 text-white py-12">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="text-center">
+              <div className="flex items-center justify-center space-x-2 mb-4">
+                <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
+                  <span className="text-white font-bold text-lg">P</span>
+                </div>
+                <span className="text-2xl font-bold">PartsQuest</span>
+              </div>
+              <p className="text-gray-400 mb-4">
+                AI-powered automotive parts sourcing for independent repair shops
+              </p>
+              <p className="text-sm text-gray-500">
+                © 2024 PartsQuest. All rights reserved.
+              </p>
+            </div>
+          </div>
+        </footer>
+      </div>
+    )
+  }
+
   // Render appropriate view
-  if (currentView === 'login') {
+  if (currentView === 'landing') {
+    return <LandingPage />
+  } else if (currentView === 'login') {
     return <AuthForm />
+  } else if (currentView === 'register') {
+    return <AuthForm isRegisterMode={true} />
+  } else if (currentView === 'subscription-selection') {
+    return <SubscriptionSelection />
   } else if (currentView === 'profile') {
     return <ProfileView />
   } else {
