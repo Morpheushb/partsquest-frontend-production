@@ -104,7 +104,7 @@ function App() {
         setUser(data.user)
         // Only allow dashboard access for users with active subscriptions
         // Users with 'inactive' status must go through subscription selection
-        if (data.user.subscription_status === 'active' || data.user.subscription_status === 'free') {
+        if (data.user.subscription_status === 'active') {
           setCurrentView('dashboard')
           loadPartRequests()
         } else {
@@ -372,7 +372,7 @@ function App() {
               <div className="flex items-center">
                 <h1 className="text-xl font-bold text-blue-600">PartsQuest</h1>
                 <Badge variant={user?.subscription_status === 'active' ? 'default' : 'secondary'} className="ml-3">
-                  {user?.subscription_status === 'active' ? 'Pro' : 'Free'}
+                  {user?.subscription_status === 'active' ? 'Pro' : 'Inactive'}
                 </Badge>
               </div>
               <div className="flex items-center space-x-4">
